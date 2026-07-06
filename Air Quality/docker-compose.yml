@@ -1,0 +1,109 @@
+services:
+
+  # Node-RED 
+  node-red:
+    image: gkousiou/nodelab:latest
+    container_name: node-red
+    restart: always
+    user: "node-red"
+    environment:
+      - TZ=Europe/Athens
+    ports:
+      - "1880:1880"
+    depends_on:
+      - minio
+    volumes:
+      - ./node-red/data:/data
+    networks:
+      - spark-minio-net
+
+  # MinIO (κρατάμε το όνομα minio όπως είναι)
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio/data:/data
+    networks:
+      - spark-minio-net
+
+  # Spark Master
+  spark-master:
+    image: apache/spark
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_MASTER_WEBUI_PORT=8080
+      - SPARK_NO_DAEMONIZE=true
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    volumes:
+      - ./sparkdir/scripts:/opt/spark/scripts
+      - ./sparkdir/data:/opt/spark/data
+      - ./sparkdir/jars:/opt/spark/external_jars
+      - ./sparkdir/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+    networks:
+      - spark-minio-net
+
+  # Spark Worker 1
+  spark-worker-1:
+    image: apache/spark
+    container_name: spark-worker-1
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_WEBUI_PORT=8081
+    ports:
+      - "8081:8081"
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    volumes:
+      - ./sparkdir/scripts:/opt/spark/scripts
+      - ./sparkdir/data:/opt/spark/data
+      - ./sparkdir/jars:/opt/spark/external_jars
+      - ./sparkdir/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+    networks:
+      - spark-minio-net
+
+  # Spark Worker 2
+  spark-worker-2:
+    image: apache/spark
+    container_name: spark-worker-2
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_WEBUI_PORT=8082
+    ports:
+      - "8082:8082"
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    volumes:
+      - ./sparkdir/scripts:/opt/spark/scripts
+      - ./sparkdir/data:/opt/spark/data
+      - ./sparkdir/jars:/opt/spark/external_jars
+      - ./sparkdir/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+    networks:
+      - spark-minio-net
+
+networks:
+  spark-minio-net:
+    driver: bridge

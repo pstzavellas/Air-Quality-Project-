@@ -1,0 +1,710 @@
+[
+    {
+        "id": "aa3f9acf9e12f88c",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "921f4ca4509a90c9",
+        "type": "minio-config",
+        "name": "MinIO Server",
+        "host": "minio",
+        "port": "9000",
+        "useSsl": false
+    },
+    {
+        "id": "e39ba24671d41adb",
+        "type": "inject",
+        "z": "aa3f9acf9e12f88c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 160,
+        "wires": [
+            [
+                "fbbc221c9556aa33"
+            ]
+        ]
+    },
+    {
+        "id": "fbbc221c9556aa33",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Setup OpenAQ Request",
+        "func": "// API key as LOCAL variable - δεν εμφανίζεται στο debug\nconst API_KEY = 'a760affef9b0046a841bd96a0deec063e89e0acc8cb606fbd07954dec40f7faf';\n\n// Get ALL Greek stations (περιλαμβάνει sensors metadata)\nmsg.url = 'https://api.openaq.org/v3/locations?iso=GR&limit=100';\nmsg.method = 'GET';\nmsg.headers = {\n    'X-API-Key': API_KEY\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 160,
+        "wires": [
+            [
+                "255443b568323ed4"
+            ]
+        ]
+    },
+    {
+        "id": "255443b568323ed4",
+        "type": "http request",
+        "z": "aa3f9acf9e12f88c",
+        "name": "OpenAQ GET",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 640,
+        "y": 160,
+        "wires": [
+            [
+                "c6fa5a89b625949e"
+            ]
+        ]
+    },
+    {
+        "id": "22bccc05584b863c",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 3780,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "c6fa5a89b625949e",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Extract Stations",
+        "func": "// Pollutants που μας ενδιαφέρουν για κατηγοριοποίηση\nconst POLLUTANTS = ['pm25', 'pm10', 'no2'];\n\n// Παίρνουμε όλους τους σταθμούς από την απάντηση\nconst stations = msg.payload.results;\n\n// Για κάθε σταθμό, χτίζουμε sensorMap και κρατάμε μόνο όσους έχουν σχετικούς ρύπους\nconst stationTasks = [];\n\nfor (const station of stations) {\n    const sensorMap = {};\n    \n    // Iterate over sensors and build the mapping\n    for (const sensor of station.sensors || []) {\n        // sensor.name είναι κάτι σαν \"pm25 µg/m³\" - κρατάμε μόνο το pm25 part\n        const pollutantName = sensor.name.split(' ')[0].toLowerCase();\n        \n        if (POLLUTANTS.includes(pollutantName)) {\n            sensorMap[sensor.id] = pollutantName;\n        }\n    }\n    \n    // Αν ο σταθμός έχει τουλάχιστον έναν σχετικό αισθητήρα, τον κρατάμε\n    if (Object.keys(sensorMap).length > 0) {\n        stationTasks.push({\n            stationId: station.id,\n            stationName: station.name,\n            locality: station.locality || 'unknown',\n            coordinates: station.coordinates,\n            sensorMap: sensorMap,\n            latestUrl: `https://api.openaq.org/v3/locations/${station.id}/latest`\n        });\n    }\n}\n\n// Επιστρέφουμε array - το split node θα τα ξεχωρίσει σε μηνύματα\nmsg.payload = stationTasks;\n\n// Counter για debugging\nnode.warn(`Found ${stationTasks.length} GR stations with PM/NO2 sensors`);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 880,
+        "y": 160,
+        "wires": [
+            [
+                "91d3eb4764fd472a"
+            ]
+        ]
+    },
+    {
+        "id": "1e4c08bf43483b51",
+        "type": "inject",
+        "z": "aa3f9acf9e12f88c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 360,
+        "wires": [
+            [
+                "6eeb0dca1d551e0f"
+            ]
+        ]
+    },
+    {
+        "id": "6eeb0dca1d551e0f",
+        "type": "buckets",
+        "z": "aa3f9acf9e12f88c",
+        "buckets_name": "MinIO Local",
+        "host": "921f4ca4509a90c9",
+        "buckets_operation": "makeBucket",
+        "buckets_bucket": "air-quality",
+        "buckets_region": "",
+        "buckets_prefix": "",
+        "buckets_recursive": false,
+        "buckets_start_after": "",
+        "x": 490,
+        "y": 360,
+        "wires": [
+            [
+                "82bc3da4c65ba935"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "82bc3da4c65ba935",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 880,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "13a068f3c693c3ec",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Prepare for Minio",
+        "func": "// Τώρα msg.payload είναι array από κάθε σταθμό (από το join node)\nconst stations = msg.payload;\n\n// Build the final structure - ένα snapshot ποιότητας αέρα Ελλάδας\nconst ingestion_ts = new Date().toISOString();\nconst ts_safe = ingestion_ts.replace(/[:.]/g, '-');\n\nconst finalData = {\n    ingestion_timestamp: ingestion_ts,\n    country: 'GR',\n    station_count: stations.length,\n    pollutants_tracked: ['pm25', 'pm10', 'no2'],\n    stations: stations\n};\n\n// Στατιστικά: πόσοι σταθμοί έχουν κάθε ρύπο\nconst counts = {\n    pm25: stations.filter(s => s.has_pm25).length,\n    pm10: stations.filter(s => s.has_pm10).length,\n    no2: stations.filter(s => s.has_no2).length\n};\n\n// Όνομα του αντικειμένου στο Minio\nconst objectName = `gr_air_quality_${ts_safe}.json`;\n\n// Metadata για searchable indexing στο Minio\nmsg.metaData = {\n    'x-amz-meta-country': 'GR',\n    'x-amz-meta-station-count': String(stations.length),\n    'x-amz-meta-pm25-stations': String(counts.pm25),\n    'x-amz-meta-pm10-stations': String(counts.pm10),\n    'x-amz-meta-no2-stations': String(counts.no2),\n    'x-amz-meta-ingestion-timestamp': String(Date.now())\n};\n\n// Για το write file node (το ίδιο path που έχουμε statically στο Save to Minio)\nmsg.filename = '/data/temp.json';\n\n// Για το Save to Minio (object name στο bucket)\nmsg.file = objectName;\nmsg.objectName = objectName;\n\n// Content - JSON string που θα γραφτεί στο temp file\nmsg.payload = JSON.stringify(finalData, null, 2);\n\n// Logging για debug\nnode.warn(`Bundled ${stations.length} stations: PM2.5=${counts.pm25}, PM10=${counts.pm10}, NO2=${counts.no2}`);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2410,
+        "y": 160,
+        "wires": [
+            [
+                "3084352f9a570d50"
+            ]
+        ]
+    },
+    {
+        "id": "3084352f9a570d50",
+        "type": "file",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Write Temp File",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 2700,
+        "y": 160,
+        "wires": [
+            [
+                "578136dcab2bab5d"
+            ]
+        ]
+    },
+    {
+        "id": "578136dcab2bab5d",
+        "type": "files",
+        "z": "aa3f9acf9e12f88c",
+        "files_name": "Save to Minio",
+        "host": "921f4ca4509a90c9",
+        "files_operation": "fPutObject",
+        "files_bucket": "air-quality",
+        "files_object": "",
+        "files_filepath": "/data/temp.json",
+        "files_metadata": "",
+        "x": 3120,
+        "y": 160,
+        "wires": [
+            [
+                "22bccc05584b863c"
+            ],
+            [
+                "cffa05db4015e5b6"
+            ]
+        ]
+    },
+    {
+        "id": "cffa05db4015e5b6",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Error Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 3730,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "91d3eb4764fd472a",
+        "type": "split",
+        "z": "aa3f9acf9e12f88c",
+        "name": "",
+        "splt": "\\n",
+        "spltType": "str",
+        "arraySplt": 1,
+        "arraySpltType": "len",
+        "stream": false,
+        "addname": "",
+        "property": "payload",
+        "x": 1110,
+        "y": 160,
+        "wires": [
+            [
+                "377e8c37b92c6eb6"
+            ]
+        ]
+    },
+    {
+        "id": "377e8c37b92c6eb6",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Setup Latest URL",
+        "func": "// Κάθε μήνυμα τώρα περιέχει ΕΝΑΝ station task (από το split)\nconst task = msg.payload;\n\n// Αποθηκεύουμε τα station info στο msg για να ταξιδέψουν με το request\nmsg.station = {\n    id: task.stationId,\n    name: task.stationName,\n    locality: task.locality,\n    coordinates: task.coordinates\n};\nmsg.sensorMap = task.sensorMap;\n\n// Setup HTTP call για /latest του συγκεκριμένου σταθμού\nconst API_KEY = 'a760affef9b0046a841bd96a0deec063e89e0acc8cb606fbd07954dec40f7faf';\n\nmsg.url = task.latestUrl;\nmsg.method = 'GET';\nmsg.headers = {\n    'X-API-Key': API_KEY\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1330,
+        "y": 160,
+        "wires": [
+            [
+                "2e2d2d4640c9ae1b"
+            ]
+        ]
+    },
+    {
+        "id": "3a3353b6a351bdc5",
+        "type": "http request",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Get Latest",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1730,
+        "y": 160,
+        "wires": [
+            [
+                "c17c701198ec3e16"
+            ]
+        ]
+    },
+    {
+        "id": "c17c701198ec3e16",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Apply Sensor Map",
+        "func": "// Παίρνουμε τα /latest results και τα station info από το msg\nconst results = msg.payload.results || [];\nconst station = msg.station;\nconst sensorMap = msg.sensorMap;\n\n// Build clean measurements object\nconst measurements = {};\nfor (const r of results) {\n    const pollutant = sensorMap[r.sensorsId];\n    if (pollutant) {\n        // Έχουμε mapping για αυτό το sensor - κράτα το\n        measurements[pollutant] = {\n            value: r.value,\n            datetime: r.datetime\n        };\n    }\n}\n\n// Replace payload with clean station data\nmsg.payload = {\n    station_id: station.id,\n    station_name: station.name,\n    locality: station.locality,\n    coordinates: station.coordinates,\n    measurements: measurements,\n    has_pm25: 'pm25' in measurements,\n    has_pm10: 'pm10' in measurements,\n    has_no2: 'no2' in measurements\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2010,
+        "y": 160,
+        "wires": [
+            [
+                "8ae7a33eb7899f7d",
+                "0ab8128b2c1d43bd"
+            ]
+        ]
+    },
+    {
+        "id": "8ae7a33eb7899f7d",
+        "type": "join",
+        "z": "aa3f9acf9e12f88c",
+        "name": "",
+        "mode": "auto",
+        "build": "object",
+        "property": "payload",
+        "propertyType": "msg",
+        "key": "topic",
+        "joiner": "\\n",
+        "joinerType": "str",
+        "useparts": false,
+        "accumulate": true,
+        "timeout": "",
+        "count": "",
+        "reduceRight": false,
+        "reduceExp": "",
+        "reduceInit": "",
+        "reduceInitType": "",
+        "reduceFixup": "",
+        "x": 2210,
+        "y": 160,
+        "wires": [
+            [
+                "13a068f3c693c3ec"
+            ]
+        ]
+    },
+    {
+        "id": "2e2d2d4640c9ae1b",
+        "type": "delay",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Rate Limit",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1.2",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1540,
+        "y": 160,
+        "wires": [
+            [
+                "3a3353b6a351bdc5"
+            ]
+        ]
+    },
+    {
+        "id": "0ab8128b2c1d43bd",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Classify Air Quality",
+        "func": "// EEA Air Quality Index (CAQI) breakpoints - επίσημα Ευρωπαϊκά\n// Πηγή: European Environment Agency (https://airindex.eea.europa.eu/)\nfunction classifyPM25(v) {\n    if (v == null) return null;\n    if (v <= 10)  return 'Good';\n    if (v <= 20)  return 'Fair';\n    if (v <= 25)  return 'Moderate';\n    if (v <= 50)  return 'Poor';\n    if (v <= 75)  return 'Very Poor';\n    return 'Extremely Poor';\n}\n\nfunction classifyPM10(v) {\n    if (v == null) return null;\n    if (v <= 20)  return 'Good';\n    if (v <= 40)  return 'Fair';\n    if (v <= 50)  return 'Moderate';\n    if (v <= 100) return 'Poor';\n    if (v <= 150) return 'Very Poor';\n    return 'Extremely Poor';\n}\n\nfunction classifyNO2(v) {\n    if (v == null) return null;\n    if (v <= 40)  return 'Good';\n    if (v <= 90)  return 'Fair';\n    if (v <= 120) return 'Moderate';\n    if (v <= 230) return 'Poor';\n    if (v <= 340) return 'Very Poor';\n    return 'Extremely Poor';\n}\n\nconst SEVERITY = {\n    'Good': 0,\n    'Fair': 1,\n    'Moderate': 2,\n    'Poor': 3,\n    'Very Poor': 4,\n    'Extremely Poor': 5\n};\n\nconst station = msg.payload;\nconst m = station.measurements || {};\n\nconst classifications = {};\nlet worstCategory = 'Good';\nlet worstSeverity = 0;\nlet worstPollutant = null;\nlet worstValue = null;\n\nfunction check(pollutant, classifier) {\n    if (!m[pollutant]) return;\n    const value = m[pollutant].value;\n    const category = classifier(value);\n    if (category === null) return;\n    classifications[pollutant] = { value, category };\n    if (SEVERITY[category] > worstSeverity) {\n        worstSeverity = SEVERITY[category];\n        worstCategory = category;\n        worstPollutant = pollutant;\n        worstValue = value;\n    }\n}\n\ncheck('pm25', classifyPM25);\ncheck('pm10', classifyPM10);\ncheck('no2',  classifyNO2);\n\nmsg.payload = {\n    station_id: station.station_id,\n    station_name: station.station_name,\n    locality: station.locality,\n    coordinates: station.coordinates,\n    classifications: classifications,\n    overall_category: worstCategory,\n    severity: worstSeverity,\n    worst_pollutant: worstPollutant,\n    worst_value: worstValue,\n    timestamp: new Date().toISOString()\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2280,
+        "y": 360,
+        "wires": [
+            [
+                "431227ccec83dfa8"
+            ]
+        ]
+    },
+    {
+        "id": "431227ccec83dfa8",
+        "type": "switch",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Alert Filter",
+        "property": "payload.severity",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "gte",
+                "v": "2",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 2590,
+        "y": 360,
+        "wires": [
+            [
+                "b3799285b57f286c"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "060a24cc413bb687",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": "🚨 Alert",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 3220,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "b3799285b57f286c",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Format Alert",
+        "func": "const a = msg.payload;\nconst emoji = {\n    'Moderate': '⚠️',\n    'Poor': '🟠',\n    'Very Poor': '🛑',\n    'Extremely Poor': '💀'\n};\n\nconst details = Object.entries(a.classifications)\n    .map(([p, c]) => `${p.toUpperCase()}=${c.value}µg/m³ (${c.category})`)\n    .join(', ');\n\nmsg.payload = `${emoji[a.overall_category] || '🚨'} [AIR QUALITY ALERT] ` +\n              `${a.station_name} (${a.locality}) → ${a.overall_category.toUpperCase()}. ` +\n              `Worst: ${a.worst_pollutant?.toUpperCase()}=${a.worst_value}µg/m³. ` +\n              `All: ${details}`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2910,
+        "y": 360,
+        "wires": [
+            [
+                "060a24cc413bb687"
+            ]
+        ]
+    },
+    {
+        "id": "46c1f7ab4c712113",
+        "type": "inject",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Every 10 min",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 560,
+        "wires": [
+            [
+                "45e3719be20e45d4"
+            ]
+        ]
+    },
+    {
+        "id": "45e3719be20e45d4",
+        "type": "change",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Setup Get Centroids",
+        "rules": [
+            {
+                "t": "set",
+                "p": "bucket",
+                "pt": "msg",
+                "to": "air-quality",
+                "tot": "str"
+            },
+            {
+                "t": "set",
+                "p": "objectName",
+                "pt": "msg",
+                "to": "models/latest_centroids.json",
+                "tot": "str"
+            },
+            {
+                "t": "set",
+                "p": "filePath",
+                "pt": "msg",
+                "to": "/data/latest_centroids.json",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 440,
+        "y": 640,
+        "wires": [
+            [
+                "08c032a16825b0c1"
+            ]
+        ]
+    },
+    {
+        "id": "08c032a16825b0c1",
+        "type": "files",
+        "z": "aa3f9acf9e12f88c",
+        "files_name": "Get Centroids from MinIO",
+        "host": "921f4ca4509a90c9",
+        "files_operation": "fGetObject",
+        "files_bucket": "air-quality",
+        "files_object": "models/latest_centroids.json",
+        "files_filepath": "/data/latest_centroids.json",
+        "files_metadata": "",
+        "x": 870,
+        "y": 720,
+        "wires": [
+            [
+                "74dbc7e47ff7e27f"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "74dbc7e47ff7e27f",
+        "type": "file in",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Read centroids.json",
+        "filename": "/data/latest_centroids.json",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "utf8",
+        "allProps": false,
+        "x": 1200,
+        "y": 580,
+        "wires": [
+            [
+                "d32cc9dda2c88eb5"
+            ]
+        ]
+    },
+    {
+        "id": "d32cc9dda2c88eb5",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Parse + Store Centroids",
+        "func": "try {\n    const data = JSON.parse(msg.payload);\n    \n    // Αποθήκευση στο flow context\n    flow.set('centroids', data.centroids);\n    flow.set('centroids_meta', {\n        trained_at: data.trained_at,\n        num_stations: data.num_stations,\n        num_snapshots: data.num_snapshots,\n        k: data.k\n    });\n    \n    node.status({\n        fill: \"green\", \n        shape: \"dot\", \n        text: `${data.centroids.length} clusters @ ${data.num_snapshots} snapshots`\n    });\n    \n    msg.payload = data;\n    return msg;\n} catch (e) {\n    node.error(\"Failed to parse centroids: \" + e.message, msg);\n    node.status({fill: \"red\", shape: \"ring\", text: \"parse error\"});\n    return null;\n}",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1570,
+        "y": 620,
+        "wires": [
+            [
+                "879fc7fecdb66d67"
+            ]
+        ]
+    },
+    {
+        "id": "879fc7fecdb66d67",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": " Centroids Loaded",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 2070,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "b17a094e4939aebc",
+        "type": "inject",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Test Assignment",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 140,
+        "y": 960,
+        "wires": [
+            [
+                "150e545f6b9b1266"
+            ]
+        ]
+    },
+    {
+        "id": "150e545f6b9b1266",
+        "type": "function",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Test Assignment",
+        "func": "const centroids = flow.get('centroids');\n\nif (!centroids || centroids.length === 0) {\n    node.status({fill: \"red\", shape: \"ring\", text: \"no centroids!\"});\n    msg.payload = \"⚠️ Centroids δεν έχουν φορτωθεί. Τρέξε πρώτα το άλλο flow.\";\n    return msg;\n}\n\n// 4 fake stations - ένας για κάθε αναμενόμενο cluster\nconst testStations = [\n    {name: \"Τυπικός μικτός σταθμός\",     pm25: 6.0,  pm10: 27.0, no2: 15.0, expected: 0},\n    {name: \"Σταθμός μόνο με PM2.5\",      pm25: 8.0,  pm10: 0.0,  no2: 0.0,  expected: 1},\n    {name: \"Αστικός υψηλής κυκλοφορίας\", pm25: 14.0, pm10: 40.0, no2: 70.0, expected: 2},\n    {name: \"Roadside υψηλό NO2\",         pm25: 3.0,  pm10: 12.0, no2: 60.0, expected: 3}\n];\n\nconst labels = {\n    0: \"🟢 Καθαρή\",\n    1: \"🔴 Σκόνη (high PM10)\",\n    2: \"🟡 Αστική (high NO2)\",\n    3: \"🟠 PM10 outlier\"\n};\n\nfunction assignCluster(pm25, pm10, no2) {\n    let minDist = Infinity;\n    let cluster = -1;\n    let distances = {};\n    \n    for (const c of centroids) {\n        const d = Math.sqrt(\n            Math.pow(pm25 - c.pm25, 2) +\n            Math.pow(pm10 - c.pm10, 2) +\n            Math.pow(no2  - c.no2,  2)\n        );\n        distances[`cluster_${c.cluster_id}`] = Math.round(d * 100) / 100;\n        if (d < minDist) {\n            minDist = d;\n            cluster = c.cluster_id;\n        }\n    }\n    return {cluster, minDist: Math.round(minDist * 100) / 100, distances};\n}\n\nconst results = testStations.map(s => {\n    const r = assignCluster(s.pm25, s.pm10, s.no2);\n    return {\n        station: s.name,\n        measurements: {pm25: s.pm25, pm10: s.pm10, no2: s.no2},\n        expected_cluster: s.expected,\n        assigned_cluster: r.cluster,\n        label: labels[r.cluster],\n        distance: r.minDist,\n        all_distances: r.distances,\n        match: r.cluster === s.expected ? \"✅ CORRECT\" : \"❌ WRONG\"\n    };\n});\n\nconst correct = results.filter(r => r.match.includes(\"CORRECT\")).length;\nnode.status({\n    fill: correct === 4 ? \"green\" : \"yellow\", \n    shape: \"dot\", \n    text: `${correct}/4 correct`\n});\n\nmsg.payload = {\n    summary: `${correct}/4 test cases passed`,\n    results: results\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 960,
+        "wires": [
+            [
+                "dddf5d5e2f2f51a5"
+            ]
+        ]
+    },
+    {
+        "id": "dddf5d5e2f2f51a5",
+        "type": "debug",
+        "z": "aa3f9acf9e12f88c",
+        "name": "Test Results",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 850,
+        "y": 960,
+        "wires": []
+    }
+]
